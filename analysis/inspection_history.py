@@ -541,6 +541,29 @@ def streamlit_dashboard():
         filtered_violations = filtered_violations.iloc[0:0]
         filtered_timeline = filtered_timeline.iloc[0:0]
 
+    st.info(
+        '**How inspections work:** Points are violation points, so lower is better. '
+        '0-13 points earns Grade A, 14-27 earns Grade B, and 28 or more earns Grade C. '
+        'A B or C grade reflects the inspection score, not a judgment about the people '
+        'working in the restaurant.'
+    )
+    explanation_columns = st.columns(3)
+    explanation_columns[0].markdown(
+        '**Points = violations**\n\n'
+        'Inspectors assign points for health-code violations. Lower totals mean fewer '
+        'or less serious problems.'
+    )
+    explanation_columns[1].markdown(
+        '**Why grades can change**\n\n'
+        'Temperature, sanitization, plumbing, and facility issues can affect a score. '
+        'Some issues may be temporary and corrected before re-inspection.'
+    )
+    explanation_columns[2].markdown(
+        '**A second chance**\n\n'
+        'After a score above 13, a restaurant may have a 30-45 day correction window '
+        'before its re-inspection result is finalized.'
+    )
+
     grade_counts = filtered.groupby('grade')['inspection_count'].sum().reindex(['A', 'B', 'C'], fill_value=0)
     metric_columns = st.columns(3)
     for column, grade in zip(metric_columns, ['A', 'B', 'C']):
@@ -595,16 +618,37 @@ def streamlit_dashboard():
         if top_violations.empty:
             st.info('No violation data matches the selected filters.')
         else:
+            critical_keywords = (
+                'temperature', 'sanit', 'food contact', 'pest', 'rodent', 'mice',
+                'flies', 'food protection', 'contamination'
+            )
+
+            def classify_violation(description):
+                normalized = description.lower()
+                if any(keyword in normalized for keyword in critical_keywords):
+                    return 'Critical health hazard'
+                return 'General facility maintenance'
+
+            top_violations['category'] = top_violations['violation_description'].map(classify_violation)
+            top_violations['short_description'] = top_violations['violation_description'].map(
+                lambda description: f'{description[:62].rstrip()}...' if len(description) > 62 else description
+            )
             violation_chart = px.bar(
                 top_violations,
                 x='violation_count',
-                y='violation_description',
+                y='short_description',
                 orientation='h',
-                title='Top 5 Violations',
-                labels={'violation_count': 'Occurrences', 'violation_description': 'Violation'},
-                color_discrete_sequence=['#d32f2f']
+                color='category',
+                title='Top 5 Violations<br><sup>Most frequent issues in the selected restaurants</sup>',
+                labels={'violation_count': 'Occurrences', 'short_description': 'Violation type', 'category': 'Context'},
+                color_discrete_map={
+                    'Critical health hazard': '#d32f2f',
+                    'General facility maintenance': '#f59e0b'
+                },
+                hover_data={'violation_description': True, 'short_description': False, 'category': True}
             )
-            violation_chart.update_layout(template='simple_white', margin=dict(t=60, b=10, l=10, r=10))
+            violation_chart.update_traces(hovertemplate='%{customdata[0]}<br>Occurrences: %{x:,}<extra></extra>')
+            violation_chart.update_layout(template='simple_white', margin=dict(t=75, b=10, l=10, r=10), legend_title_text='')
             st.plotly_chart(violation_chart, use_container_width=True)
 
     with visualization_columns[1]:
@@ -629,11 +673,35 @@ def streamlit_dashboard():
                 x='inspection_date',
                 y='average_score',
                 markers=True,
-                title='Average Inspection Points Over Time',
-                labels={'inspection_date': 'Inspection date', 'average_score': 'Average points'}
+                title='Average Inspection Points Over Time<br><sup>Violation points: lower is better</sup>',
+                labels={'inspection_date': 'Inspection date', 'average_score': 'Violation points (lower is better)'}
             )
             score_chart.update_traces(line_color='#0288d1', hovertemplate='%{x|%b %Y}: %{y:.1f} points<extra></extra>')
-            score_chart.update_layout(template='simple_white', margin=dict(t=60, b=10, l=10, r=10))
+            score_chart.add_hline(
+                y=13,
+                line_color='#2e7d32',
+                line_dash='dash',
+                annotation_text='Grade A cutoff: 13 pts',
+                annotation_position='top left'
+            )
+            score_chart.add_hline(
+                y=27,
+                line_color='#f59e0b',
+                line_dash='dash',
+                annotation_text='Grade B cutoff: 27 pts',
+                annotation_position='bottom left'
+            )
+            score_chart.add_annotation(
+                x=0.02,
+                y=0.98,
+                xref='paper',
+                yref='paper',
+                text='Upward spikes can reflect initial audits; later drops may reflect corrections at re-inspection.',
+                showarrow=False,
+                align='left',
+                font=dict(size=10, color='#475569')
+            )
+            score_chart.update_layout(template='simple_white', margin=dict(t=95, b=10, l=10, r=10))
             st.plotly_chart(score_chart, use_container_width=True)
 
     st.subheader('Restaurant Inspection Details')
