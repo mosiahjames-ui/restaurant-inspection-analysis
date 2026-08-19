@@ -307,6 +307,7 @@ def run_analysis():
     dashboard_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dashboard_data.csv')
     cursor.execute("""
         SELECT
+            COALESCE(dba, 'Unknown') AS dba,
             COALESCE(boro, 'Unknown') AS boro,
             COALESCE(cuisine_description, 'Unknown') AS cuisine_description,
             grade,
@@ -315,16 +316,54 @@ def run_analysis():
             MAX(inspection_date) AS last_inspection
         FROM aggregated_inspections
         WHERE grade IN ('A', 'B', 'C')
-        GROUP BY COALESCE(boro, 'Unknown'), COALESCE(cuisine_description, 'Unknown'), grade
+        GROUP BY COALESCE(dba, 'Unknown'), COALESCE(boro, 'Unknown'), COALESCE(cuisine_description, 'Unknown'), grade
     """)
     dashboard_rows = cursor.fetchall()
     with open(dashboard_data_path, 'w', newline='') as dashboard_file:
         writer = csv.writer(dashboard_file)
         writer.writerow([
-            'boro', 'cuisine_description', 'grade', 'inspection_count',
+            'dba', 'boro', 'cuisine_description', 'grade', 'inspection_count',
             'first_inspection', 'last_inspection'
         ])
         writer.writerows(dashboard_rows)
+
+    violation_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'violation_summary.csv')
+    cursor.execute("""
+        SELECT
+            COALESCE(o.boro, 'Unknown') AS boro,
+            COALESCE(o.cuisine_description, 'Unknown') AS cuisine_description,
+            o.grade,
+            COALESCE(o.violation_description, 'Unknown') AS violation_description,
+            COUNT(*) AS violation_count
+        FROM observations o
+        WHERE o.grade IN ('A', 'B', 'C')
+        GROUP BY COALESCE(o.boro, 'Unknown'), COALESCE(o.cuisine_description, 'Unknown'),
+                 o.grade, COALESCE(o.violation_description, 'Unknown')
+    """)
+    with open(violation_data_path, 'w', newline='') as violation_file:
+        writer = csv.writer(violation_file)
+        writer.writerow(['boro', 'cuisine_description', 'grade', 'violation_description', 'violation_count'])
+        writer.writerows(cursor.fetchall())
+
+    timeline_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'score_timeline.csv')
+    cursor.execute("""
+        SELECT
+            COALESCE(boro, 'Unknown') AS boro,
+            COALESCE(cuisine_description, 'Unknown') AS cuisine_description,
+            grade,
+            inspection_date,
+            AVG(score) AS average_score,
+            COUNT(*) AS inspection_count
+        FROM aggregated_inspections
+        WHERE grade IN ('A', 'B', 'C') AND score IS NOT NULL
+        GROUP BY COALESCE(boro, 'Unknown'), COALESCE(cuisine_description, 'Unknown'),
+                 grade, inspection_date
+        ORDER BY inspection_date
+    """)
+    with open(timeline_data_path, 'w', newline='') as timeline_file:
+        writer = csv.writer(timeline_file)
+        writer.writerow(['boro', 'cuisine_description', 'grade', 'inspection_date', 'average_score', 'inspection_count'])
+        writer.writerows(cursor.fetchall())
 
     print("Analysis completed successfully. Results saved to analysis/results.json")
     
@@ -354,6 +393,7 @@ def load_dashboard_data(db_path):
         data['last_inspection'] = pd.to_datetime(data['last_inspection'], errors='coerce')
         data['boro'] = data['boro'].fillna('Unknown').replace('', 'Unknown')
         data['cuisine_description'] = data['cuisine_description'].fillna('Unknown').replace('', 'Unknown')
+        data['dba'] = data['dba'].fillna('Unknown').replace('', 'Unknown')
         return data
 
     conn, cursor = initialize_database(db_path)
@@ -381,7 +421,8 @@ def load_dashboard_data(db_path):
         conn.commit()
 
     data = pd.read_sql_query("""
-         SELECT COALESCE(boro, 'Unknown') AS boro,
+         SELECT COALESCE(dba, 'Unknown') AS dba,
+             COALESCE(boro, 'Unknown') AS boro,
              COALESCE(cuisine_description, 'Unknown') AS cuisine_description,
              grade,
              COUNT(*) AS inspection_count,
@@ -389,7 +430,7 @@ def load_dashboard_data(db_path):
              MAX(inspection_date) AS last_inspection
         FROM aggregated_inspections
         WHERE grade IN ('A', 'B', 'C')
-         GROUP BY COALESCE(boro, 'Unknown'), COALESCE(cuisine_description, 'Unknown'), grade
+        GROUP BY COALESCE(dba, 'Unknown'), COALESCE(boro, 'Unknown'), COALESCE(cuisine_description, 'Unknown'), grade
     """, conn)
     conn.close()
 
@@ -397,56 +438,38 @@ def load_dashboard_data(db_path):
     data['last_inspection'] = pd.to_datetime(data['last_inspection'], errors='coerce')
     data['boro'] = data['boro'].fillna('Unknown').replace('', 'Unknown')
     data['cuisine_description'] = data['cuisine_description'].fillna('Unknown').replace('', 'Unknown')
+    data['dba'] = data['dba'].fillna('Unknown').replace('', 'Unknown')
     return data
+
+
+def load_dashboard_support_data(db_path):
+    """Load compact violation and score timeline summaries for Streamlit charts."""
+    import pandas as pd
+
+    analysis_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(db_path))), 'analysis')
+    violation_path = os.path.join(analysis_dir, 'violation_summary.csv')
+    timeline_path = os.path.join(analysis_dir, 'score_timeline.csv')
+
+    violations = pd.read_csv(violation_path)
+    timeline = pd.read_csv(timeline_path)
+    timeline['inspection_date'] = pd.to_datetime(timeline['inspection_date'], errors='coerce')
+    return violations, timeline
 
 
 def streamlit_dashboard():
     """Render the interactive inspection dashboard with Streamlit and Plotly."""
+    import pandas as pd
     import plotly.express as px
     import streamlit as st
 
     st.set_page_config(page_title='NYC Restaurant Inspections', page_icon='🍽️', layout='wide')
     st.title('NYC Restaurant Inspections')
-    st.caption('Interactive grade and inspection-history analysis from NYC Open Data')
-
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    db_path = os.path.join(project_root, 'data', 'restaurant_data.db')
-
-    try:
-        data = load_dashboard_data(db_path)
-    except Exception as error:
-        st.error(f'Could not load the inspection data: {error}')
-        st.stop()
-
-    palette = {'A': '#1e6b50', 'B': '#d5962d', 'C': '#bf5a45'}
-    boroughs = sorted(data['boro'].dropna().unique())
-    cuisines = sorted(data['cuisine_description'].dropna().unique())
-
-    st.sidebar.header('Filter dashboard')
-    selected_borough = st.sidebar.selectbox('Borough', ['All boroughs'] + boroughs)
-    selected_cuisines = st.sidebar.multiselect(
-        'Cuisine',
-        cuisines,
-        help='Leave empty to include every cuisine.'
-    )
-
-    filtered = data.copy()
-    if selected_borough != 'All boroughs':
-        filtered = filtered[filtered['boro'] == selected_borough]
-    if selected_cuisines:
-        filtered = filtered[filtered['cuisine_description'].isin(selected_cuisines)]
-
-    with st.expander('How to read these grades'):
-        start_date = data['first_inspection'].min()
-        end_date = data['last_inspection'].max()
-        st.write(
-            f"The graded inspection records cover {start_date:%B %-d, %Y} "
-            f"through {end_date:%B %-d, %Y}."
-        )
-        st.write(
-            'The source data is recorded at the violation level. Multiple violation rows '
-            'from one inspection are grouped together before calculating grade histories.'
-        )
+    with st.expander('How to read these grades', expanded=False):
+        st.markdown('### NYC Health inspection point thresholds')
+        threshold_columns = st.columns(3)
+        threshold_columns[0].markdown('**Grade A**\n\n0-13 points')
+        threshold_columns[1].markdown('**Grade B**\n\n14-27 points')
+        threshold_columns[2].markdown('**Grade C**\n\n28+ points')
         st.markdown(
             '**Stable A:** every available graded inspection for a restaurant was A, '
             'with at least two graded inspections.\n\n'
@@ -459,6 +482,64 @@ def streamlit_dashboard():
             'Stable describes consistency in the available records. It does not mean '
             'the restaurant was inspected continuously outside this dataset.'
         )
+    st.caption('Interactive grade and inspection-history analysis from NYC Open Data')
+
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db_path = os.path.join(project_root, 'data', 'restaurant_data.db')
+
+    try:
+        data = load_dashboard_data(db_path)
+        violation_data, timeline_data = load_dashboard_support_data(db_path)
+    except Exception as error:
+        st.error(f'Could not load the inspection data: {error}')
+        st.stop()
+
+    palette = {'A': '#2e7d32', 'B': '#0288d1', 'C': '#d32f2f'}
+    boroughs = sorted(data['boro'].dropna().unique())
+    cuisines = sorted(data['cuisine_description'].dropna().unique())
+
+    with st.expander('Filter Dashboard Options', expanded=True):
+        filter_columns = st.columns(3)
+        with filter_columns[0]:
+            selected_borough = st.selectbox('Borough', ['All boroughs'] + boroughs)
+        with filter_columns[1]:
+            selected_cuisines = st.multiselect(
+                'Cuisine',
+                cuisines,
+                help='Leave empty to include every cuisine.'
+            )
+        with filter_columns[2]:
+            selected_grades = st.multiselect(
+                'Grade filter',
+                ['A', 'B', 'C'],
+                default=['A', 'B', 'C']
+            )
+
+    filtered = data.copy()
+    if selected_borough != 'All boroughs':
+        filtered = filtered[filtered['boro'] == selected_borough]
+    if selected_cuisines:
+        filtered = filtered[filtered['cuisine_description'].isin(selected_cuisines)]
+    filtered = filtered[filtered['grade'].isin(selected_grades)]
+
+    filtered_violations = violation_data.copy()
+    filtered_timeline = timeline_data.copy()
+    if selected_borough != 'All boroughs':
+        filtered_violations = filtered_violations[filtered_violations['boro'] == selected_borough]
+        filtered_timeline = filtered_timeline[filtered_timeline['boro'] == selected_borough]
+    if selected_cuisines:
+        filtered_violations = filtered_violations[
+            filtered_violations['cuisine_description'].isin(selected_cuisines)
+        ]
+        filtered_timeline = filtered_timeline[
+            filtered_timeline['cuisine_description'].isin(selected_cuisines)
+        ]
+    if selected_grades:
+        filtered_violations = filtered_violations[filtered_violations['grade'].isin(selected_grades)]
+        filtered_timeline = filtered_timeline[filtered_timeline['grade'].isin(selected_grades)]
+    else:
+        filtered_violations = filtered_violations.iloc[0:0]
+        filtered_timeline = filtered_timeline.iloc[0:0]
 
     grade_counts = filtered.groupby('grade')['inspection_count'].sum().reindex(['A', 'B', 'C'], fill_value=0)
     metric_columns = st.columns(3)
@@ -477,7 +558,6 @@ def streamlit_dashboard():
     )
     donut.update_traces(textinfo='percent+label', hovertemplate='Grade %{label}: %{value:,} (%{percent})<extra></extra>')
     donut.update_layout(template='simple_white', margin=dict(t=60, b=10, l=10, r=10), showlegend=False)
-    st.plotly_chart(donut, use_container_width=True)
 
     borough_grade_counts = (
         filtered.groupby(['boro', 'grade'], as_index=False)['inspection_count']
@@ -496,7 +576,103 @@ def streamlit_dashboard():
         category_orders={'grade': ['A', 'B', 'C']}
     )
     borough_chart.update_layout(template='simple_white', margin=dict(t=60, b=10, l=10, r=10), legend_title_text='')
-    st.plotly_chart(borough_chart, use_container_width=True)
+
+    chart_columns = st.columns(2)
+    with chart_columns[0]:
+        st.plotly_chart(donut, use_container_width=True)
+    with chart_columns[1]:
+        st.plotly_chart(borough_chart, use_container_width=True)
+
+    visualization_columns = st.columns(2)
+    with visualization_columns[0]:
+        top_violations = (
+            filtered_violations.groupby('violation_description', as_index=False)['violation_count']
+            .sum()
+            .sort_values('violation_count', ascending=False)
+            .head(5)
+            .sort_values('violation_count')
+        )
+        if top_violations.empty:
+            st.info('No violation data matches the selected filters.')
+        else:
+            violation_chart = px.bar(
+                top_violations,
+                x='violation_count',
+                y='violation_description',
+                orientation='h',
+                title='Top 5 Violations',
+                labels={'violation_count': 'Occurrences', 'violation_description': 'Violation'},
+                color_discrete_sequence=['#d32f2f']
+            )
+            violation_chart.update_layout(template='simple_white', margin=dict(t=60, b=10, l=10, r=10))
+            st.plotly_chart(violation_chart, use_container_width=True)
+
+    with visualization_columns[1]:
+        timeline_points = (
+            filtered_timeline.assign(
+                weighted_score=lambda frame: frame['average_score'] * frame['inspection_count']
+            )
+            .groupby('inspection_date', as_index=False)
+            .agg(
+                weighted_score=('weighted_score', 'sum'),
+                inspection_count=('inspection_count', 'sum')
+            )
+        )
+        if timeline_points.empty:
+            st.info('No timeline data matches the selected filters.')
+        else:
+            timeline_points['average_score'] = (
+                timeline_points['weighted_score'] / timeline_points['inspection_count']
+            )
+            score_chart = px.line(
+                timeline_points,
+                x='inspection_date',
+                y='average_score',
+                markers=True,
+                title='Average Inspection Points Over Time',
+                labels={'inspection_date': 'Inspection date', 'average_score': 'Average points'}
+            )
+            score_chart.update_traces(line_color='#0288d1', hovertemplate='%{x|%b %Y}: %{y:.1f} points<extra></extra>')
+            score_chart.update_layout(template='simple_white', margin=dict(t=60, b=10, l=10, r=10))
+            st.plotly_chart(score_chart, use_container_width=True)
+
+    st.subheader('Restaurant Inspection Details')
+    table_columns = st.columns([3, 1])
+    with table_columns[0]:
+        restaurant_search = st.text_input(
+            'Search by restaurant name',
+            placeholder='e.g. Joloff',
+            key='restaurant_table_search'
+        )
+
+    table_data = filtered.copy()
+    if restaurant_search.strip():
+        table_data = table_data[
+            table_data['dba'].str.contains(restaurant_search.strip(), case=False, na=False)
+        ]
+
+    display_columns = {
+        'dba': 'Restaurant',
+        'boro': 'Borough',
+        'cuisine_description': 'Cuisine',
+        'grade': 'Grade',
+        'inspection_count': 'Inspections',
+        'first_inspection': 'First inspection',
+        'last_inspection': 'Last inspection'
+    }
+    table_view = table_data[list(display_columns)].rename(columns=display_columns).copy()
+    for date_column in ['First inspection', 'Last inspection']:
+        table_view[date_column] = table_view[date_column].dt.strftime('%Y-%m-%d')
+    table_view = table_view.sort_values(['Restaurant', 'Grade'])
+    st.dataframe(table_view, use_container_width=True, hide_index=True)
+
+    with table_columns[1]:
+        st.download_button(
+            'Download CSV',
+            data=table_view.to_csv(index=False).encode('utf-8'),
+            file_name='filtered_restaurants.csv',
+            mime='text/csv'
+        )
 
 
 if __name__ == "__main__":
