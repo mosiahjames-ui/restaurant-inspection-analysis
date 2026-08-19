@@ -464,12 +464,32 @@ def streamlit_dashboard():
 
     st.set_page_config(page_title='NYC Restaurant Inspections', page_icon='🍽️', layout='wide')
     st.title('NYC Restaurant Inspections')
-    with st.expander('How to read these grades', expanded=False):
+    with st.expander('Beyond the Letter: The Real Story Behind the Score', expanded=False):
         st.markdown('### NYC Health inspection point thresholds')
         threshold_columns = st.columns(3)
         threshold_columns[0].markdown('**Grade A**\n\n0-13 points')
         threshold_columns[1].markdown('**Grade B**\n\n14-27 points')
         threshold_columns[2].markdown('**Grade C**\n\n28+ points')
+        st.info(
+            '**Points = violations:** In NYC, lower points are better. Fewer points mean '
+            'fewer or less serious infractions.'
+        )
+        explanation_columns = st.columns(3)
+        explanation_columns[0].markdown(
+            '**Scores are Like Golf (Lower = Better)**\n\n'
+            '0-13 = Grade A | 14-27 = Grade B | 28+ = Grade C. '
+            'Fewer points mean fewer infractions.'
+        )
+        explanation_columns[1].markdown(
+            "**A 'B' Isn't Always Bad**\n\n"
+            'Up to half of points can come from facility quirks like lighting, floor tiles, '
+            'or paper signs, not necessarily a dirty kitchen.'
+        )
+        explanation_columns[2].markdown(
+            '**The Re-Inspection Comeback**\n\n'
+            'Scoring above 13 can give a restaurant a 30-45 day window to fix issues '
+            'before its official grade is finalized.'
+        )
         st.markdown(
             '**Stable A:** every available graded inspection for a restaurant was A, '
             'with at least two graded inspections.\n\n'
@@ -540,29 +560,6 @@ def streamlit_dashboard():
     else:
         filtered_violations = filtered_violations.iloc[0:0]
         filtered_timeline = filtered_timeline.iloc[0:0]
-
-    st.info(
-        '**How inspections work:** Points are violation points, so lower is better. '
-        '0-13 points earns Grade A, 14-27 earns Grade B, and 28 or more earns Grade C. '
-        'A B or C grade reflects the inspection score, not a judgment about the people '
-        'working in the restaurant.'
-    )
-    explanation_columns = st.columns(3)
-    explanation_columns[0].markdown(
-        '**Points = violations**\n\n'
-        'Inspectors assign points for health-code violations. Lower totals mean fewer '
-        'or less serious problems.'
-    )
-    explanation_columns[1].markdown(
-        '**Why grades can change**\n\n'
-        'Temperature, sanitization, plumbing, and facility issues can affect a score. '
-        'Some issues may be temporary and corrected before re-inspection.'
-    )
-    explanation_columns[2].markdown(
-        '**A second chance**\n\n'
-        'After a score above 13, a restaurant may have a 30-45 day correction window '
-        'before its re-inspection result is finalized.'
-    )
 
     grade_counts = filtered.groupby('grade')['inspection_count'].sum().reindex(['A', 'B', 'C'], fill_value=0)
     metric_columns = st.columns(3)
