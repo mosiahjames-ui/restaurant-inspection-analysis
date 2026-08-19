@@ -391,7 +391,7 @@ def load_dashboard_data(db_path):
         data = pd.read_csv(dashboard_data_path)
         data['first_inspection'] = pd.to_datetime(data['first_inspection'], errors='coerce')
         data['last_inspection'] = pd.to_datetime(data['last_inspection'], errors='coerce')
-        data['boro'] = data['boro'].fillna('Unknown').replace('', 'Unknown')
+        data['boro'] = data['boro'].fillna('Unknown').replace(['', '0', 0], 'Unknown')
         data['cuisine_description'] = data['cuisine_description'].fillna('Unknown').replace('', 'Unknown')
         data['dba'] = data['dba'].fillna('Unknown').replace('', 'Unknown')
         return data
@@ -436,7 +436,7 @@ def load_dashboard_data(db_path):
 
     data['first_inspection'] = pd.to_datetime(data['first_inspection'], errors='coerce')
     data['last_inspection'] = pd.to_datetime(data['last_inspection'], errors='coerce')
-    data['boro'] = data['boro'].fillna('Unknown').replace('', 'Unknown')
+    data['boro'] = data['boro'].fillna('Unknown').replace(['', '0', 0], 'Unknown')
     data['cuisine_description'] = data['cuisine_description'].fillna('Unknown').replace('', 'Unknown')
     data['dba'] = data['dba'].fillna('Unknown').replace('', 'Unknown')
     return data
@@ -452,6 +452,8 @@ def load_dashboard_support_data(db_path):
 
     violations = pd.read_csv(violation_path)
     timeline = pd.read_csv(timeline_path)
+    violations['boro'] = violations['boro'].fillna('Unknown').replace(['', '0', 0], 'Unknown')
+    timeline['boro'] = timeline['boro'].fillna('Unknown').replace(['', '0', 0], 'Unknown')
     timeline['inspection_date'] = pd.to_datetime(timeline['inspection_date'], errors='coerce')
     return violations, timeline
 
