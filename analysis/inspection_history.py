@@ -607,8 +607,7 @@ def streamlit_dashboard():
     with chart_columns[1]:
         st.plotly_chart(borough_chart, use_container_width=True)
 
-    visualization_columns = st.columns(2)
-    with visualization_columns[0]:
+    with st.container():
         top_violations = (
             filtered_violations.groupby('violation_description', as_index=False)['violation_count']
             .sum()
@@ -652,7 +651,18 @@ def streamlit_dashboard():
             violation_chart.update_layout(template='simple_white', margin=dict(t=75, b=10, l=10, r=10), legend_title_text='')
             st.plotly_chart(violation_chart, use_container_width=True)
 
-    with visualization_columns[1]:
+    st.divider()
+    st.subheader('📈 How Restaurant Scores Change Over Time')
+    st.info('''
+**Understanding Violation Points:**
+* **0 - 13 Points (Grade A):** Indicates high sanitary standards and minimal issues.
+* **14 - 27 Points (Grade B) and 28+ Points (Grade C):** Indicates accumulated health or facility violations.
+
+**Why do you see sudden spikes and drops?**
+Spikes represent an initial unannounced inspection where an inspector logs every minor or major infraction. Sudden drops right after a spike show that the restaurant corrected those issues during its re-inspection, usually 30-45 days later, to improve or maintain its official grade.
+''')
+
+    with st.container():
         timeline_points = (
             filtered_timeline.assign(
                 weighted_score=lambda frame: frame['average_score'] * frame['inspection_count']
@@ -674,7 +684,7 @@ def streamlit_dashboard():
                 x='inspection_date',
                 y='average_score',
                 markers=True,
-                title='Average Inspection Points Over Time<br><sup>Violation points: lower is better</sup>',
+                title='Average Inspection Points Over Time',
                 labels={'inspection_date': 'Inspection date', 'average_score': 'Violation points (lower is better)'}
             )
             score_chart.update_traces(line_color='#0288d1', hovertemplate='%{x|%b %Y}: %{y:.1f} points<extra></extra>')
@@ -692,18 +702,50 @@ def streamlit_dashboard():
                 annotation_text='Grade B cutoff: 27 pts',
                 annotation_position='bottom left'
             )
-            score_chart.add_annotation(
-                x=0.02,
-                y=0.98,
-                xref='paper',
-                yref='paper',
-                text='Upward spikes can reflect initial audits; later drops may reflect corrections at re-inspection.',
-                showarrow=False,
-                align='left',
-                font=dict(size=10, color='#475569')
+            score_chart.update_layout(
+                template='simple_white',
+                height=500,
+                margin=dict(t=50, b=50, l=50, r=50)
             )
-            score_chart.update_layout(template='simple_white', margin=dict(t=95, b=10, l=10, r=10))
             st.plotly_chart(score_chart, use_container_width=True)
+            st.caption(
+                '💡 Upward spikes reflect initial audit findings; subsequent drops show '
+                'corrections made during re-inspection.'
+            )
+
+    st.subheader('Recommendations for your selection')
+    st.caption(
+        'These suggestions match the Borough, Cuisine, and Grade filters above. '
+        'Restaurants are ranked by their latest available grade, with A ranked ahead '
+        'of B and C. This is an inspection-based guide, not a review of food or service.'
+    )
+    recommendation_columns = ['dba', 'boro', 'cuisine_description', 'grade', 'inspection_count', 'last_inspection']
+    recommendations = filtered[recommendation_columns].copy()
+    recommendations['grade_rank'] = recommendations['grade'].map({'A': 1, 'B': 2, 'C': 3})
+    recommendations = (
+        recommendations.sort_values(
+            ['dba', 'last_inspection', 'grade_rank', 'inspection_count'],
+            ascending=[True, False, True, False]
+        )
+        .drop_duplicates(['dba', 'boro', 'cuisine_description'])
+        .sort_values(['grade_rank', 'last_inspection', 'inspection_count'], ascending=[True, False, False])
+        .head(10)
+    )
+    if recommendations.empty:
+        st.info('No restaurants match the selected Borough, Cuisine, and Grade filters.')
+    else:
+        recommendation_view = recommendations.rename(columns={
+            'dba': 'Restaurant',
+            'boro': 'Borough',
+            'cuisine_description': 'Cuisine',
+            'grade': 'Latest grade',
+            'inspection_count': 'Recorded inspections',
+            'last_inspection': 'Latest inspection'
+        })[
+            ['Restaurant', 'Borough', 'Cuisine', 'Latest grade', 'Recorded inspections', 'Latest inspection']
+        ].copy()
+        recommendation_view['Latest inspection'] = recommendation_view['Latest inspection'].dt.strftime('%Y-%m-%d')
+        st.dataframe(recommendation_view, use_container_width=True, hide_index=True)
 
     st.subheader('Restaurant Inspection Details')
     table_columns = st.columns([3, 1])
