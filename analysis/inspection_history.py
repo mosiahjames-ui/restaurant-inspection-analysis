@@ -555,6 +555,43 @@ def streamlit_dashboard():
                 default=['A', 'B', 'C']
             )
 
+    cuisine_bg_images = {
+        'American': 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=1920&q=80',
+        'Italian': 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1920&q=80',
+        'Pizza': 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1920&q=80',
+        'Chinese': 'https://images.unsplash.com/photo-1525755662778-989d0524087e?auto=format&fit=crop&w=1920&q=80',
+        'Japanese': 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=1920&q=80',
+        'Mexican': 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=1920&q=80',
+        'Indian': 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=1920&q=80',
+        'French': 'https://images.unsplash.com/photo-1502301103665-0b95cc738daf?auto=format&fit=crop&w=1920&q=80',
+        'Thai': 'https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&w=1920&q=80',
+        'Bakery': 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1920&q=80'
+    }
+    default_bg = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1920&q=80'
+    selected_cuisine_for_background = selected_cuisines[0] if selected_cuisines else None
+    active_bg = next(
+        (
+            image_url for cuisine_name, image_url in cuisine_bg_images.items()
+            if selected_cuisine_for_background
+            and cuisine_name.lower() in selected_cuisine_for_background.lower()
+        ),
+        default_bg
+    )
+    st.markdown(
+        f'''
+        <style>
+        .stApp {{
+            background-color: #17221d;
+            background-image: linear-gradient(rgba(14, 17, 23, 0.88), rgba(14, 17, 23, 0.88)), url("{active_bg}");
+            background-attachment: fixed;
+            background-size: cover;
+            background-position: center;
+        }}
+        </style>
+        ''',
+        unsafe_allow_html=True
+    )
+
     filtered = data.copy()
     if selected_borough != 'All boroughs':
         filtered = filtered[filtered['boro'] == selected_borough]
