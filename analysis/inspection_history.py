@@ -538,22 +538,22 @@ def streamlit_dashboard():
     boroughs = sorted(data['boro'].dropna().unique())
     cuisines = sorted(data['cuisine_description'].dropna().unique())
 
-    with st.expander('Find restaurants by place, cuisine, or grade', expanded=True):
-        filter_columns = st.columns(3)
-        with filter_columns[0]:
-            selected_borough = st.selectbox('Borough', ['All boroughs'] + boroughs)
-        with filter_columns[1]:
-            selected_cuisines = st.multiselect(
-                'Cuisine',
-                cuisines,
-                help='Leave empty to include every cuisine.'
-            )
-        with filter_columns[2]:
-            selected_grades = st.multiselect(
-                'Grade filter',
-                ['A', 'B', 'C'],
-                default=['A', 'B', 'C']
-            )
+    st.subheader('Find restaurants by place, cuisine, or grade')
+    filter_columns = st.columns(3)
+    with filter_columns[0]:
+        selected_borough = st.selectbox('Borough', ['All boroughs'] + boroughs)
+    with filter_columns[1]:
+        selected_cuisines = st.multiselect(
+            'Cuisine',
+            cuisines,
+            help='Leave empty to include every cuisine.'
+        )
+    with filter_columns[2]:
+        selected_grades = st.multiselect(
+            'Grade filter',
+            ['A', 'B', 'C'],
+            default=['A', 'B', 'C']
+        )
 
     cuisine_bg_images = {
         'American': 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=1920&q=80',
