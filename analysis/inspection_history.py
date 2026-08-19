@@ -732,37 +732,6 @@ def streamlit_dashboard():
             violation_chart.update_layout(template='simple_white', margin=dict(t=75, b=10, l=10, r=10), legend_title_text='')
             st.plotly_chart(violation_chart, use_container_width=True)
 
-    cuisine_images = {
-        'Pizza': 'https://images.unsplash.com/photo-1579751626657-72bc17010498?auto=format&fit=crop&w=1600&q=80',
-        'American': 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=1600&q=80',
-        'Italian': 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=1600&q=80',
-        'Chinese': 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=1600&q=80',
-        'Bakery': 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1600&q=80',
-        'Mexican': 'https://images.unsplash.com/photo-1552332386-f8dd00dc2f85?auto=format&fit=crop&w=1600&q=80',
-        'Japanese': 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=1600&q=80'
-    }
-    default_food_image = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1600&q=80'
-
-    selected_cuisine = selected_cuisines[0] if selected_cuisines else None
-    if not selected_cuisine and not quick_matches.empty:
-        selected_cuisine = quick_matches.iloc[0]['cuisine_description']
-    if not selected_cuisine and not filtered.empty:
-        selected_cuisine = filtered.iloc[0]['cuisine_description']
-
-    cuisine_key = next(
-        (
-            key for key in cuisine_images
-            if selected_cuisine and key.lower() in selected_cuisine.lower()
-        ),
-        None
-    )
-    banner_image = cuisine_images.get(cuisine_key, default_food_image)
-
-    st.image(
-        banner_image,
-        caption=f'{selected_cuisine or "Restaurant dining"} inspection history',
-        use_container_width=True
-    )
     st.divider()
     st.subheader('📈 How Restaurant Scores Change Over Time')
     st.info('''
