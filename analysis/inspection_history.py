@@ -474,9 +474,8 @@ def streamlit_dashboard():
         'really means over time.'
     )
     st.write(
-        "Before You Bite helps you look beyond a restaurant's letter grade. Explore its "
-        'inspection history, understand how its grade has changed, and see the patterns '
-        'behind the number.'
+        "Look beyond the letter grade: explore a restaurant's history, how its grade "
+        'changed, and the patterns behind the number.'
     )
     st.markdown('### 📊 Beyond the Letter: The Real Story Behind the Score')
     st.markdown('#### NYC Health inspection point thresholds')
@@ -528,6 +527,13 @@ def streamlit_dashboard():
         st.error(f'Could not load the inspection data: {error}')
         st.stop()
 
+    start_date = data['first_inspection'].min()
+    end_date = data['last_inspection'].max()
+    st.caption(
+        f'Coverage: {start_date:%B %-d, %Y} through {end_date:%B %-d, %Y}. '
+        'Use the filters to find restaurants before you choose where to eat.'
+    )
+
     palette = {'A': '#2e7d32', 'B': '#0288d1', 'C': '#d32f2f'}
     boroughs = sorted(data['boro'].dropna().unique())
     cuisines = sorted(data['cuisine_description'].dropna().unique())
@@ -578,7 +584,35 @@ def streamlit_dashboard():
     grade_counts = filtered.groupby('grade')['inspection_count'].sum().reindex(['A', 'B', 'C'], fill_value=0)
     metric_columns = st.columns(3)
     for column, grade in zip(metric_columns, ['A', 'B', 'C']):
-        column.metric(f'Grade {grade} inspections', f'{grade_counts[grade]:,}')
+        column.metric(f'Recorded Grade {grade} visits', f'{grade_counts[grade]:,}')
+
+    st.subheader('Your best matches')
+    st.caption(
+        'These are the top matches for your choices, ranked by the latest available '
+        'grade. A is shown before B, then C.'
+    )
+    quick_matches = filtered.copy()
+    quick_matches['grade_rank'] = quick_matches['grade'].map({'A': 1, 'B': 2, 'C': 3})
+    quick_matches = (
+        quick_matches.sort_values(
+            ['grade_rank', 'last_inspection', 'inspection_count'],
+            ascending=[True, False, False]
+        )
+        .drop_duplicates(['dba', 'boro', 'cuisine_description'])
+        .head(5)
+    )
+    if quick_matches.empty:
+        st.info('No restaurants match those choices yet. Try another filter.')
+    else:
+        quick_view = quick_matches.rename(columns={
+            'dba': 'Restaurant',
+            'boro': 'Borough',
+            'cuisine_description': 'Cuisine',
+            'grade': 'Latest grade',
+            'last_inspection': 'Latest visit'
+        })[['Restaurant', 'Borough', 'Cuisine', 'Latest grade', 'Latest visit']].copy()
+        quick_view['Latest visit'] = quick_view['Latest visit'].dt.strftime('%Y-%m-%d')
+        st.dataframe(quick_view, use_container_width=True, hide_index=True)
 
     donut_data = grade_counts.rename_axis('grade').reset_index(name='count')
     donut = px.pie(
@@ -723,7 +757,7 @@ Spikes represent an initial unannounced inspection where an inspector logs every
                 'corrections made during re-inspection.'
             )
 
-    st.subheader('Restaurants matching your choices')
+    st.subheader('All matching restaurant history')
     st.caption(
         'These suggestions match the Borough, Cuisine, and Grade filters above. '
         'Restaurants are ranked by their latest available grade, with A ranked ahead '
