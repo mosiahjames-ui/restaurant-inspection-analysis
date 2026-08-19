@@ -468,44 +468,44 @@ def streamlit_dashboard():
         layout='wide'
     )
     st.title('Beyond the Letter: The Real Story Behind the Score')
-    with st.expander('Beyond the Letter: The Real Story Behind the Score', expanded=False):
-        st.markdown('### NYC Health inspection point thresholds')
-        threshold_columns = st.columns(3)
-        threshold_columns[0].markdown('**Grade A**\n\n0-13 points')
-        threshold_columns[1].markdown('**Grade B**\n\n14-27 points')
-        threshold_columns[2].markdown('**Grade C**\n\n28+ points')
-        st.info(
-            '**Points = violations:** In NYC, lower points are better. Fewer points mean '
-            'fewer or less serious infractions.'
-        )
-        explanation_columns = st.columns(3)
-        explanation_columns[0].markdown(
-            '**Scores are Like Golf (Lower = Better)**\n\n'
-            '0-13 = Grade A | 14-27 = Grade B | 28+ = Grade C. '
-            'Fewer points mean fewer infractions.'
-        )
-        explanation_columns[1].markdown(
-            "**A 'B' Isn't Always Bad**\n\n"
-            'Up to half of points can come from facility quirks like lighting, floor tiles, '
-            'or paper signs, not necessarily a dirty kitchen.'
-        )
-        explanation_columns[2].markdown(
-            '**The Re-Inspection Comeback**\n\n'
-            'Scoring above 13 can give a restaurant a 30-45 day window to fix issues '
-            'before its official grade is finalized.'
-        )
-        st.markdown(
-            '**Stable A:** every available graded inspection for a restaurant was A, '
-            'with at least two graded inspections.\n\n'
-            '**Stable B:** every available graded inspection was B, with at least two '
-            'graded inspections.\n\n'
-            '**Stable C:** every available graded inspection was C, with at least two '
-            'graded inspections.'
-        )
-        st.caption(
-            'Stable describes consistency in the available records. It does not mean '
-            'the restaurant was inspected continuously outside this dataset.'
-        )
+    st.markdown('### 📊 Lower Scores, Better Kitchens')
+    st.markdown('#### NYC Health inspection point thresholds')
+    threshold_columns = st.columns(3)
+    threshold_columns[0].markdown('**Grade A**\n\n0-13 points')
+    threshold_columns[1].markdown('**Grade B**\n\n14-27 points')
+    threshold_columns[2].markdown('**Grade C**\n\n28+ points')
+    st.info(
+        '**Points = violations:** In NYC, lower points are better. Fewer points mean '
+        'fewer or less serious infractions.'
+    )
+    explanation_columns = st.columns(3)
+    explanation_columns[0].markdown(
+        '**Lower Scores, Fewer Issues**\n\n'
+        '0-13 = Grade A | 14-27 = Grade B | 28+ = Grade C. '
+        'Fewer points mean fewer infractions.'
+    )
+    explanation_columns[1].markdown(
+        "**A 'B' Isn't Always Bad**\n\n"
+        'Up to half of points can come from facility quirks like lighting, floor tiles, '
+        'or paper signs, not necessarily a dirty kitchen.'
+    )
+    explanation_columns[2].markdown(
+        '**The Re-Inspection Comeback**\n\n'
+        'Scoring above 13 can give a restaurant a 30-45 day window to fix issues '
+        'before its official grade is finalized.'
+    )
+    st.markdown(
+        '**Stable A:** every available graded inspection for a restaurant was A, '
+        'with at least two graded inspections.\n\n'
+        '**Stable B:** every available graded inspection was B, with at least two '
+        'graded inspections.\n\n'
+        '**Stable C:** every available graded inspection was C, with at least two '
+        'graded inspections.'
+    )
+    st.caption(
+        'Stable describes consistency in the available records. It does not mean '
+        'the restaurant was inspected continuously outside this dataset.'
+    )
     st.caption('Interactive grade and inspection-history analysis from NYC Open Data')
 
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
