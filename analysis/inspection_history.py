@@ -462,8 +462,12 @@ def streamlit_dashboard():
     import plotly.express as px
     import streamlit as st
 
-    st.set_page_config(page_title='NYC Restaurant Inspections', page_icon='🍽️', layout='wide')
-    st.title('NYC Restaurant Inspections')
+    st.set_page_config(
+        page_title='Beyond the Letter: The Real Story Behind the Score',
+        page_icon='🍽️',
+        layout='wide'
+    )
+    st.title('Beyond the Letter: The Real Story Behind the Score')
     with st.expander('Beyond the Letter: The Real Story Behind the Score', expanded=False):
         st.markdown('### NYC Health inspection point thresholds')
         threshold_columns = st.columns(3)
