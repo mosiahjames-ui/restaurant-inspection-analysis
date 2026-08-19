@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NYC Restaurant Inspections</title>
+  <title>Before You Bite | NYC Restaurant Inspection Insights</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <style>
     :root {
@@ -101,18 +101,18 @@
   <main class="shell">
     <header>
       <div>
-        <p class="eyebrow">Data discovery / NYC Open Data</p>
-        <h1>Restaurant inspections, over time.</h1>
+        <p class="eyebrow">Before You Bite</p>
+        <h1>Know the story behind the grade before you choose where to eat.</h1>
       </div>
-      <p class="intro">A visual summary of health grades, inspection trajectories, and violation patterns.</p>
+      <p class="intro">Explore NYC restaurant inspection history and see what a restaurant's grade really means over time.</p>
     </header>
 
     <div id="status" class="status">Loading analysis/results.json...</div>
     <section id="dashboard" class="hidden">
       <section class="explainer">
-        <h2>How to read these grades</h2>
+        <h2>Beyond the Letter: The Real Story Behind the Score</h2>
         <p id="timeframe"></p>
-        <p>These results are based on inspection-level records with an A, B, or C grade. The source dataset is recorded at the violation level, so multiple violation rows from one inspection are grouped together before grade histories are calculated.</p>
+        <p>Before You Bite helps you look beyond a restaurant's letter grade. Multiple health issues can be recorded during one visit, so those records are grouped together to show the restaurant's history more clearly.</p>
         <div class="definition-list">
           <div class="definition"><strong>Stable A</strong>At least two graded inspections, and every graded inspection in the available history was an A.</div>
           <div class="definition"><strong>Stable B</strong>At least two graded inspections, and every graded inspection in the available history was a B.</div>
@@ -123,22 +123,22 @@
       <div id="metrics" class="metrics"></div>
       <div class="grid">
         <article class="panel">
-          <h2>Current grades</h2>
-          <p>Restaurants with at least two graded inspections.</p>
+          <h2>What grades are restaurants receiving?</h2>
+          <p>Restaurants with at least two recorded graded visits.</p>
           <div class="chart-wrap"><canvas id="gradeChart"></canvas></div>
         </article>
         <article class="panel">
-          <h2>Trajectory mix</h2>
-          <p>How restaurants reached their current grade.</p>
+          <h2>How grades changed</h2>
+          <p>How restaurants reached their current letter grade.</p>
           <div class="chart-wrap"><canvas id="trajectoryChart"></canvas></div>
         </article>
         <article class="panel wide">
-          <h2>Violations by trajectory</h2>
-          <p>Average violations recorded across inspection histories.</p>
+          <h2>Common health issues by history</h2>
+          <p>Average issues recorded across restaurant histories.</p>
           <div class="chart-wrap"><canvas id="violationChart"></canvas></div>
         </article>
         <article class="panel wide">
-          <h2>Example grade timelines</h2>
+          <h2>Example grade histories</h2>
           <p>Each line follows one restaurant's recorded A, B, or C grades over time.</p>
           <div class="history-chart"><canvas id="historyChart"></canvas></div>
           <div id="examples" class="examples"></div>

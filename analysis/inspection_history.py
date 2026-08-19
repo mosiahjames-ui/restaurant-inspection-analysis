@@ -463,12 +463,22 @@ def streamlit_dashboard():
     import streamlit as st
 
     st.set_page_config(
-        page_title='Beyond the Letter: The Real Story Behind the Score',
+        page_title='Before You Bite | NYC Restaurant Inspection Insights',
         page_icon='🍽️',
         layout='wide'
     )
-    st.title('Beyond the Letter: The Real Story Behind the Score')
-    st.markdown('### 📊 Lower Scores, Better Kitchens')
+    st.title('Before You Bite')
+    st.subheader('Know the story behind the grade before you choose where to eat.')
+    st.caption(
+        "Explore NYC restaurant inspection history and see what a restaurant's grade "
+        'really means over time.'
+    )
+    st.write(
+        "Before You Bite helps you look beyond a restaurant's letter grade. Explore its "
+        'inspection history, understand how its grade has changed, and see the patterns '
+        'behind the number.'
+    )
+    st.markdown('### 📊 Beyond the Letter: The Real Story Behind the Score')
     st.markdown('#### NYC Health inspection point thresholds')
     threshold_columns = st.columns(3)
     threshold_columns[0].markdown('**Grade A**\n\n0-13 points')
@@ -522,7 +532,7 @@ def streamlit_dashboard():
     boroughs = sorted(data['boro'].dropna().unique())
     cuisines = sorted(data['cuisine_description'].dropna().unique())
 
-    with st.expander('Filter Dashboard Options', expanded=True):
+    with st.expander('Find restaurants by place, cuisine, or grade', expanded=True):
         filter_columns = st.columns(3)
         with filter_columns[0]:
             selected_borough = st.selectbox('Borough', ['All boroughs'] + boroughs)
@@ -576,7 +586,7 @@ def streamlit_dashboard():
         names='grade',
         values='count',
         hole=0.62,
-        title='Grade breakdown',
+        title='What grades are restaurants receiving?',
         color='grade',
         color_discrete_map=palette
     )
@@ -594,8 +604,8 @@ def streamlit_dashboard():
         y='count',
         color='grade',
         barmode='group',
-        title='Grade Distribution by Borough',
-        labels={'boro': 'Borough', 'count': 'Inspection count', 'grade': 'Grade'},
+        title='Grades by borough',
+        labels={'boro': 'Borough', 'count': 'Restaurants and inspections', 'grade': 'Letter grade'},
         color_discrete_map=palette,
         category_orders={'grade': ['A', 'B', 'C']}
     )
@@ -639,8 +649,8 @@ def streamlit_dashboard():
                 y='short_description',
                 orientation='h',
                 color='category',
-                title='Top 5 Violations<br><sup>Most frequent issues in the selected restaurants</sup>',
-                labels={'violation_count': 'Occurrences', 'short_description': 'Violation type', 'category': 'Context'},
+                title='Top 5 common health issues<br><sup>Most frequent issues in the selected restaurants</sup>',
+                labels={'violation_count': 'Times recorded', 'short_description': 'Health issue', 'category': 'What it relates to'},
                 color_discrete_map={
                     'Critical health hazard': '#d32f2f',
                     'General facility maintenance': '#f59e0b'
@@ -684,8 +694,8 @@ Spikes represent an initial unannounced inspection where an inspector logs every
                 x='inspection_date',
                 y='average_score',
                 markers=True,
-                title='Average Inspection Points Over Time',
-                labels={'inspection_date': 'Inspection date', 'average_score': 'Violation points (lower is better)'}
+                title='How scores change over time',
+                labels={'inspection_date': 'Date of visit', 'average_score': 'Health issue points (lower is better)'}
             )
             score_chart.update_traces(line_color='#0288d1', hovertemplate='%{x|%b %Y}: %{y:.1f} points<extra></extra>')
             score_chart.add_hline(
@@ -713,7 +723,7 @@ Spikes represent an initial unannounced inspection where an inspector logs every
                 'corrections made during re-inspection.'
             )
 
-    st.subheader('Recommendations for your selection')
+    st.subheader('Restaurants matching your choices')
     st.caption(
         'These suggestions match the Borough, Cuisine, and Grade filters above. '
         'Restaurants are ranked by their latest available grade, with A ranked ahead '
@@ -747,7 +757,7 @@ Spikes represent an initial unannounced inspection where an inspector logs every
         recommendation_view['Latest inspection'] = recommendation_view['Latest inspection'].dt.strftime('%Y-%m-%d')
         st.dataframe(recommendation_view, use_container_width=True, hide_index=True)
 
-    st.subheader('Restaurant Inspection Details')
+    st.subheader('Explore the restaurant history')
     table_columns = st.columns([3, 1])
     with table_columns[0]:
         restaurant_search = st.text_input(
