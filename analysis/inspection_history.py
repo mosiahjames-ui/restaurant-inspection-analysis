@@ -1,12 +1,103 @@
 import sqlite3
 import collections
+import csv
 import json
+import os
+
+def initialize_database(db_path):
+    """Check if database and inspection_events table exist and are populated.
+    If not, initialize them from raw data."""
+    
+    # Check if database file exists
+    if not os.path.exists(db_path):
+        print("Database not found. Initializing from raw data...")
+        # Import and run setup from scripts/analyze_dataset.py
+        import sys
+        sys.path.insert(0, 'scripts')
+        from analyze_dataset import setup_db
+        json_path = 'data/raw_dataset.json'
+        if os.path.exists(json_path):
+            setup_db(json_path, db_path)
+        else:
+            raise FileNotFoundError(f"Raw data file not found: {json_path}")
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # Check if inspection_events table exists and is populated
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='inspection_events'")
+    table_exists = cursor.fetchone() is not None
+    
+    if not table_exists:
+        print("inspection_events table not found. Creating it...")
+        cursor.execute("DROP TABLE IF EXISTS inspection_events")
+        cursor.execute("""
+            CREATE TABLE inspection_events AS
+            SELECT 
+                o.camis,
+                o.dba,
+                o.inspection_date,
+                o.inspection_type,
+                MAX(o.grade) AS grade,
+                MAX(o.score) AS score,
+                MAX(o.grade_date) AS grade_date,
+                o.boro,
+                o.cuisine_description,
+                COUNT(*) AS num_violations,
+                SUM(CASE WHEN o.critical_flag = 'Critical' THEN 1 ELSE 0 END) AS num_critical_violations,
+                SUM(CASE WHEN o.critical_flag = 'Not Critical' THEN 1 ELSE 0 END) AS num_non_critical_violations
+            FROM observations o
+            GROUP BY 
+                o.camis,
+                o.dba,
+                o.inspection_date,
+                o.inspection_type,
+                o.boro,
+                o.cuisine_description
+        """)
+        conn.commit()
+        print("inspection_events table created successfully.")
+    else:
+        # Check if table is populated
+        cursor.execute("SELECT COUNT(*) FROM inspection_events")
+        count = cursor.fetchone()[0]
+        if count == 0:
+            print("inspection_events table is empty. Populating it...")
+            cursor.execute("DROP TABLE IF EXISTS inspection_events")
+            cursor.execute("""
+                CREATE TABLE inspection_events AS
+                SELECT 
+                    o.camis,
+                    o.dba,
+                    o.inspection_date,
+                    o.inspection_type,
+                    MAX(o.grade) AS grade,
+                    MAX(o.score) AS score,
+                    MAX(o.grade_date) AS grade_date,
+                    o.boro,
+                    o.cuisine_description,
+                    COUNT(*) AS num_violations,
+                    SUM(CASE WHEN o.critical_flag = 'Critical' THEN 1 ELSE 0 END) AS num_critical_violations,
+                    SUM(CASE WHEN o.critical_flag = 'Not Critical' THEN 1 ELSE 0 END) AS num_non_critical_violations
+                FROM observations o
+                GROUP BY 
+                    o.camis,
+                    o.dba,
+                    o.inspection_date,
+                    o.inspection_type,
+                    o.boro,
+                    o.cuisine_description
+            """)
+            conn.commit()
+            print("inspection_events table populated successfully.")
+    
+    return conn, cursor
 
 def run_analysis():
     db_path = 'data/restaurant_data.db'
     
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    # Initialize database and inspection_events table if needed
+    conn, cursor = initialize_database(db_path)
 
     print("Step 1: Aggregating violation-level data to inspection-level...")
 
@@ -57,9 +148,12 @@ def run_analysis():
     
     restaurant_histories = collections.defaultdict(list)
     restaurant_metadata = {}
+    graded_inspection_dates = []
 
     for row in cursor.fetchall():
         camis, dba, date, grade, score, ins_type, boro, cuisine, n_viol, n_crit, n_non_crit = row
+        if date:
+            graded_inspection_dates.append(date)
         
         restaurant_histories[camis].append({
             'date': date,
@@ -113,7 +207,7 @@ def run_analysis():
                 'cuisine': restaurant_metadata[camis]['cuisine'],
                 'date': h['date'],
                 'grade': h['grade'],
-                'core': h['score'],
+                'core': h['core'],
                 'num_violations': h['num_violations'],
                 'num_critical_violations': h['num_critical_violations'],
                 'num_non_critical_violations': h['num_non_critical_violations']
@@ -125,7 +219,12 @@ def run_analysis():
         'trajectories': {},
         'current_grade_distribution': {},
         'violation_averages': {},
-        'epresentative_examples': []
+        'representative_examples': [],
+        'grade_timeframe': {
+            'start': min(graded_inspection_dates) if graded_inspection_dates else None,
+            'end': max(graded_inspection_dates) if graded_inspection_dates else None,
+            'inspection_count': len(graded_inspection_dates)
+        }
     }
 
     # Part 6: Violation Analysis
@@ -182,7 +281,7 @@ def run_analysis():
                 
             if trajectory == target:
                 example = {
-                    'estaurant_name': restaurant_metadata[camis]['dba'],
+                    'restaurant_name': restaurant_metadata[camis]['dba'],
                     'borough': restaurant_metadata[camis]['boro'],
                     'cuisine': restaurant_metadata[camis]['cuisine'],
                     'history': []
@@ -191,7 +290,7 @@ def run_analysis():
                     example['history'].append({
                         'date': h['date'],
                         'grade': h['grade'],
-                        'core': h['score'],
+                        'core': h['core'],
                         'violations': h['num_violations'],
                         'critical_violations': h['num_critical_violations']
                     })
@@ -205,6 +304,28 @@ def run_analysis():
     with open('analysis/results.json', 'w') as f:
         json.dump(results, f, indent=4)
 
+    dashboard_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dashboard_data.csv')
+    cursor.execute("""
+        SELECT
+            COALESCE(boro, 'Unknown') AS boro,
+            COALESCE(cuisine_description, 'Unknown') AS cuisine_description,
+            grade,
+            COUNT(*) AS inspection_count,
+            MIN(inspection_date) AS first_inspection,
+            MAX(inspection_date) AS last_inspection
+        FROM aggregated_inspections
+        WHERE grade IN ('A', 'B', 'C')
+        GROUP BY COALESCE(boro, 'Unknown'), COALESCE(cuisine_description, 'Unknown'), grade
+    """)
+    dashboard_rows = cursor.fetchall()
+    with open(dashboard_data_path, 'w', newline='') as dashboard_file:
+        writer = csv.writer(dashboard_file)
+        writer.writerow([
+            'boro', 'cuisine_description', 'grade', 'inspection_count',
+            'first_inspection', 'last_inspection'
+        ])
+        writer.writerows(dashboard_rows)
+
     print("Analysis completed successfully. Results saved to analysis/results.json")
     
     print("\n--- Summary ---")
@@ -217,5 +338,175 @@ def run_analysis():
 
     conn.close()
 
+
+def load_dashboard_data(db_path):
+    """Load one row per inspection for the interactive Streamlit dashboard."""
+    dashboard_data_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(db_path))),
+        'analysis',
+        'dashboard_data.csv'
+    )
+    import pandas as pd
+
+    if os.path.exists(dashboard_data_path):
+        data = pd.read_csv(dashboard_data_path)
+        data['first_inspection'] = pd.to_datetime(data['first_inspection'], errors='coerce')
+        data['last_inspection'] = pd.to_datetime(data['last_inspection'], errors='coerce')
+        data['boro'] = data['boro'].fillna('Unknown').replace('', 'Unknown')
+        data['cuisine_description'] = data['cuisine_description'].fillna('Unknown').replace('', 'Unknown')
+        return data
+
+    conn, cursor = initialize_database(db_path)
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='aggregated_inspections'")
+    table_exists = cursor.fetchone() is not None
+
+    if not table_exists:
+        cursor.execute("""
+            CREATE TABLE aggregated_inspections AS
+            SELECT
+                camis,
+                dba,
+                inspection_date,
+                MIN(grade) AS grade,
+                AVG(CAST(score AS REAL)) AS score,
+                inspection_type,
+                boro,
+                cuisine_description,
+                COUNT(*) AS num_violations,
+                SUM(CASE WHEN critical_flag = 'Critical' THEN 1 ELSE 0 END) AS num_critical_violations,
+                SUM(CASE WHEN critical_flag = 'Not Critical' THEN 1 ELSE 0 END) AS num_non_critical_violations
+            FROM observations
+            GROUP BY camis, inspection_date
+        """)
+        conn.commit()
+
+    data = pd.read_sql_query("""
+         SELECT COALESCE(boro, 'Unknown') AS boro,
+             COALESCE(cuisine_description, 'Unknown') AS cuisine_description,
+             grade,
+             COUNT(*) AS inspection_count,
+             MIN(inspection_date) AS first_inspection,
+             MAX(inspection_date) AS last_inspection
+        FROM aggregated_inspections
+        WHERE grade IN ('A', 'B', 'C')
+         GROUP BY COALESCE(boro, 'Unknown'), COALESCE(cuisine_description, 'Unknown'), grade
+    """, conn)
+    conn.close()
+
+    data['first_inspection'] = pd.to_datetime(data['first_inspection'], errors='coerce')
+    data['last_inspection'] = pd.to_datetime(data['last_inspection'], errors='coerce')
+    data['boro'] = data['boro'].fillna('Unknown').replace('', 'Unknown')
+    data['cuisine_description'] = data['cuisine_description'].fillna('Unknown').replace('', 'Unknown')
+    return data
+
+
+def streamlit_dashboard():
+    """Render the interactive inspection dashboard with Streamlit and Plotly."""
+    import plotly.express as px
+    import streamlit as st
+
+    st.set_page_config(page_title='NYC Restaurant Inspections', page_icon='🍽️', layout='wide')
+    st.title('NYC Restaurant Inspections')
+    st.caption('Interactive grade and inspection-history analysis from NYC Open Data')
+
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db_path = os.path.join(project_root, 'data', 'restaurant_data.db')
+
+    try:
+        data = load_dashboard_data(db_path)
+    except Exception as error:
+        st.error(f'Could not load the inspection data: {error}')
+        st.stop()
+
+    palette = {'A': '#1e6b50', 'B': '#d5962d', 'C': '#bf5a45'}
+    boroughs = sorted(data['boro'].dropna().unique())
+    cuisines = sorted(data['cuisine_description'].dropna().unique())
+
+    st.sidebar.header('Filter dashboard')
+    selected_borough = st.sidebar.selectbox('Borough', ['All boroughs'] + boroughs)
+    selected_cuisines = st.sidebar.multiselect(
+        'Cuisine',
+        cuisines,
+        help='Leave empty to include every cuisine.'
+    )
+
+    filtered = data.copy()
+    if selected_borough != 'All boroughs':
+        filtered = filtered[filtered['boro'] == selected_borough]
+    if selected_cuisines:
+        filtered = filtered[filtered['cuisine_description'].isin(selected_cuisines)]
+
+    with st.expander('How to read these grades'):
+        start_date = data['first_inspection'].min()
+        end_date = data['last_inspection'].max()
+        st.write(
+            f"The graded inspection records cover {start_date:%B %-d, %Y} "
+            f"through {end_date:%B %-d, %Y}."
+        )
+        st.write(
+            'The source data is recorded at the violation level. Multiple violation rows '
+            'from one inspection are grouped together before calculating grade histories.'
+        )
+        st.markdown(
+            '**Stable A:** every available graded inspection for a restaurant was A, '
+            'with at least two graded inspections.\n\n'
+            '**Stable B:** every available graded inspection was B, with at least two '
+            'graded inspections.\n\n'
+            '**Stable C:** every available graded inspection was C, with at least two '
+            'graded inspections.'
+        )
+        st.caption(
+            'Stable describes consistency in the available records. It does not mean '
+            'the restaurant was inspected continuously outside this dataset.'
+        )
+
+    grade_counts = filtered.groupby('grade')['inspection_count'].sum().reindex(['A', 'B', 'C'], fill_value=0)
+    metric_columns = st.columns(3)
+    for column, grade in zip(metric_columns, ['A', 'B', 'C']):
+        column.metric(f'Grade {grade} inspections', f'{grade_counts[grade]:,}')
+
+    donut_data = grade_counts.rename_axis('grade').reset_index(name='count')
+    donut = px.pie(
+        donut_data,
+        names='grade',
+        values='count',
+        hole=0.62,
+        title='Grade breakdown',
+        color='grade',
+        color_discrete_map=palette
+    )
+    donut.update_traces(textinfo='percent+label', hovertemplate='Grade %{label}: %{value:,} (%{percent})<extra></extra>')
+    donut.update_layout(template='simple_white', margin=dict(t=60, b=10, l=10, r=10), showlegend=False)
+    st.plotly_chart(donut, use_container_width=True)
+
+    borough_grade_counts = (
+        filtered.groupby(['boro', 'grade'], as_index=False)['inspection_count']
+        .sum()
+        .rename(columns={'inspection_count': 'count'})
+    )
+    borough_chart = px.bar(
+        borough_grade_counts,
+        x='boro',
+        y='count',
+        color='grade',
+        barmode='group',
+        title='Grade Distribution by Borough',
+        labels={'boro': 'Borough', 'count': 'Inspection count', 'grade': 'Grade'},
+        color_discrete_map=palette,
+        category_orders={'grade': ['A', 'B', 'C']}
+    )
+    borough_chart.update_layout(template='simple_white', margin=dict(t=60, b=10, l=10, r=10), legend_title_text='')
+    st.plotly_chart(borough_chart, use_container_width=True)
+
+
 if __name__ == "__main__":
-    run_analysis()
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        running_in_streamlit = get_script_run_ctx() is not None
+    except ImportError:
+        running_in_streamlit = False
+
+    if running_in_streamlit:
+        streamlit_dashboard()
+    else:
+        run_analysis()
